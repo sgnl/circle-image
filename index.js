@@ -5,15 +5,25 @@ var Q = require('q');
 var fs = require('fs');
 var path = require('path');
 
-var basePath = path.dirname(require.main.filename);
-var baseParts = basePath.split('/');
-baseParts.splice(-1, 1);
-var finalPath = baseParts.join('/');
-console.log(finalPath);
-var outputTempFilePath = finalPath + '/uploads/temp_user_%d_%d.png';
-var outputFilePath = finalPath +'/uploads/circle_user_%d_%d.png';
+var outputTempFilePath = null
+  , outputFilePath = null
+  , tempDir = null
+  , outputDir = null
+  , filename = null
 
-exports.execute = function execute(imagePath, uniqueId, sizesArray) {
+module.exports = function(options) {
+  tempDir = path.join(process.cwd(), options.tempDir)
+
+  outputDir = options.outputDir
+  filename = options.filename
+
+  outputTempFilePath = path.join(process.cwd(), tempDir)
+  outputFilePath = path.join(process.cwd(), outputDir)
+
+  return execute
+};
+
+var execute = function execute(imagePath, uniqueId, sizesArray) {
   var defer = Q.defer();
   getDimensions(imagePath).then(function success(dimensions) {
     var sortedSizes = sizesArray.sort(function(a, b){return b-a;});
@@ -107,7 +117,7 @@ function processImages(path, uniqueId, sizesArray) {
   return defer.promise;
 }
 
-var squareUp = function squareUp(path, size, originalWidth, originalHeight) {
+function squareUp(path, size, originalWidth, originalHeight) {
   console.log('square up image');
   return easyimg.crop({
     src: path,
@@ -122,29 +132,28 @@ var squareUp = function squareUp(path, size, originalWidth, originalHeight) {
   });
 };
 
-var resize = function resize(path, uniqueId, size) {
-  console.log('cropping: ' + size);
+function resize(path, uniqueId, size) {
   var tempPath = format(outputTempFilePath, uniqueId, size);
 
   return easyimg.exec('convert ' + path + ' -resize ' +
     (size) + 'x' + (size) + '^  -gravity center -crop ' +
-    (size + 2) + 'x' + (size + 2) + '+0+0 +repage ' + tempPath).then(function success () {
+    (size + 2) + 'x' + (size + 2) + '+0+0 +repage ' + `${tempDir}/${filename}`).then(function success () {
       return tempPath;
     }, function error (err) {
       return err;
     });
 };
 
-var circularize = function circularize(path, uniqueId, size) {
-  console.log('circularizing: ' + size);
+function circularize(path, uniqueId, size) {
+  console.log('circularizing: ', size);
   var radius = (size/2) - 1;
   var circleSize = format('%1$d,%1$d %1$d 0', radius);
-  var tempPath = format(outputTempFilePath, uniqueId, size);
-  var finalPath = format(outputFilePath, uniqueId, size);
+  var tempPath = format(path, uniqueId, size);
+  var finalPath = format(`${outputFilePath}/${path}`, uniqueId, size);
 
-  return easyimg.exec('convert ' + tempPath + ' \\( -size ' + (size) + 'x' + (size) +
+  return easyimg.exec('convert ' + tempPath + ' \\( -gravity center -size ' + (size) + 'x' + (size) +
   ' xc:none -fill white -draw \'circle ' + circleSize + '\' \\) ' +
-  '-compose copy_opacity -composite ' + finalPath).then(function success () {
+  '-compose copy_opacity -composite ' + path).then(function success () {
     return finalPath;
   }, function error (err) {
     return err;
